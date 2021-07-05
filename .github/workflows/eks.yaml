@@ -57,10 +57,34 @@ jobs:
 
       - name: Create EKS cluster without nodegroup
         run: |
-          eksctl create cluster \
-            --name ${{ env.clusterName }} \
-            --tags "usage=${{ github.repository_owner }}-${{ github.event.repository.name }},owner=${{ steps.vars.outputs.owner }}" \
-            --without-nodegroup
+          cat <<EOF > eks-config.yaml
+          apiVersion: eksctl.io/v1alpha5
+          kind: ClusterConfig
+
+          metadata:
+            name: ${{ env.clusterName }}
+            region: ${{ env.region }}
+            tags:
+             usage: "${{ github.repository_owner }}-${{ github.event.repository.name }}"
+             owner: "${{ steps.vars.outputs.owner }}"
+
+          managedNodeGroups:
+          - name: ng-1
+            instanceTypes:
+             - t3.medium
+             - t3a.medium
+            desiredCapacity: 2
+            spot: true
+            privateNetworking: true
+            volumeType: "gp3"
+            volumeSize: 10
+            taints:
+             - key: "node.cilium.io/agent-not-ready"
+               value: "true"
+               effect: "NoSchedule"
+          EOF
+
+          eksctl create cluster -f ./eks-config.yaml
 
       - name: Create kubeconfig and load it in configmap
         run: |
