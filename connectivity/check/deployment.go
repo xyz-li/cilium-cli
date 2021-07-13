@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cilium/cilium-cli/defaults"
@@ -613,13 +614,25 @@ func (ct *ConnectivityTest) waitForService(ctx context.Context, service Service)
 
 		// Warning: ExecInPodWithStderr ignores ctx. Don't pass it here so we don't
 		// falsely expect the function to be able to be cancelled.
-		_, e, err := ct.client.ExecInPodWithStderr(context.TODO(),
+		stdout, e, err := ct.client.ExecInPodWithStderr(context.TODO(),
 			pod.Pod.Namespace, pod.Pod.Name, pod.Pod.Labels["name"],
 			[]string{"nslookup", service.Service.Name}) // BusyBox nslookup doesn't support any arguments.
 
 		// Lookup successful.
 		if err == nil {
-			return nil
+			svcIP := ""
+			switch service.Service.Spec.Type {
+			case corev1.ServiceTypeClusterIP, corev1.ServiceTypeNodePort:
+				svcIP = service.Service.Spec.ClusterIP
+			case corev1.ServiceTypeLoadBalancer:
+				if len(service.Service.Status.LoadBalancer.Ingress) > 0 {
+					svcIP = service.Service.Status.LoadBalancer.Ingress[0].IP
+				}
+			}
+			if strings.Contains(stdout.String(), svcIP) {
+				return nil
+			}
+			err = fmt.Errorf("Service IP %q not found in nslookup output %q", svcIP, stdout.String())
 		}
 
 		ct.Debugf("Error waiting for service %s: %s: %s", service.Name(), err, e.String())
