@@ -2,7 +2,7 @@ name: EKS (ENI)
 
 # Any change in triggers needs to be reflected in the concurrency group.
 on:
-  pull_request_target: {}
+  pull_request: {}
   # Run every 6 hours
   schedule:
     - cron:  '0 1/6 * * *'
@@ -112,7 +112,7 @@ jobs:
           kubectl -n kube-system wait job/cilium-cli --for=condition=complete --timeout=10m
 
       - name: Post-test information gathering
-        if: ${{ failure() }}
+        if: ${{ always() }}
         run: |
           echo "=== Retrieve in-cluster jobs logs ==="
           kubectl logs --timestamps -n kube-system job/cilium-cli-install
